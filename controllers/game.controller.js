@@ -61,7 +61,9 @@ export const updateGameResult = async (game) => {
     game.result.homeScore !== result.homeScore ||
     game.result.awayScore !== result.awayScore
   ) {
-    game.result = result;
+    // Atualiza só homeScore/awayScore, preservando result.penalties (G.P.)
+    game.result.homeScore = result.homeScore;
+    game.result.awayScore = result.awayScore;
     await game.save();
   }
 
@@ -208,7 +210,9 @@ export const updateGame = async (req, res) => {
     }
 
     if (result !== undefined) {
-      game.result = result;
+      if (result.homeScore !== undefined) game.result.homeScore = result.homeScore;
+      if (result.awayScore !== undefined) game.result.awayScore = result.awayScore;
+      if (result.penalties !== undefined) game.result.penalties = result.penalties;
     }
 
     const updatedGame = await game.save();

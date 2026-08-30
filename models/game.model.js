@@ -68,6 +68,12 @@ const gameSchema = new mongoose.Schema(
     result: {
       homeScore: { type: Number, default: 0, required: false },
       awayScore: { type: Number, default: 0, required: false },
+      // Resultado do desempate por grandes penalidades (G.P.), quando aplicável.
+      // Não conta para o resultado normal (homeScore/awayScore).
+      penalties: {
+        homeScore: { type: Number, required: false },
+        awayScore: { type: Number, required: false },
+      },
     },
     mvp: {
       type: mongoose.Schema.Types.ObjectId,
