@@ -2,8 +2,8 @@ import Event from "../models/event.model.js";
 import Game from "../models/game.model.js";
 import { updateGameResult } from "./game.controller.js";
 
-// Tipo de evento visível apenas ao administrador (não é exibido no site público)
-const ADMIN_ONLY_EVENT_TYPE = "oportunidade de golo";
+// Tipo de evento visível apenas ao staff (gameMaster/admin) — não é exibido no site público
+const STAFF_ONLY_EVENT_TYPE = "oportunidade de golo";
 
 // Criar evento
 export const createEvent = async (req, res) => {
@@ -14,10 +14,10 @@ export const createEvent = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    if (type === ADMIN_ONLY_EVENT_TYPE && req.user?.role !== "admin") {
+    if (type === STAFF_ONLY_EVENT_TYPE && !req.user) {
       return res
         .status(403)
-        .json({ message: "Access denied - Admin only event type" });
+        .json({ message: "Access denied - Staff only event type" });
     }
 
     if (time < 0 || time > 60) {
@@ -79,9 +79,9 @@ export const createEvent = async (req, res) => {
 //  Listar todos os eventos
 export const getAllEvents = async (req, res) => {
   try {
-    const isAdmin = req.user?.role === "admin";
+    const isStaff = !!req.user;
 
-    const filter = isAdmin ? {} : { type: { $ne: ADMIN_ONLY_EVENT_TYPE } };
+    const filter = isStaff ? {} : { type: { $ne: STAFF_ONLY_EVENT_TYPE } };
 
     const events = await Event.find(filter)
       .populate("player")
@@ -108,8 +108,7 @@ export const getEventById = async (req, res) => {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    const isAdmin = req.user?.role === "admin";
-    if (event.type === ADMIN_ONLY_EVENT_TYPE && !isAdmin) {
+    if (event.type === STAFF_ONLY_EVENT_TYPE && !req.user) {
       return res.status(404).json({ message: "Event not found" });
     }
 
@@ -163,10 +162,10 @@ export const updateEvent = async (req, res) => {
       if (!validTypes.includes(type)) {
         return res.status(400).json({ message: "Invalid event type" });
       }
-      if (type === ADMIN_ONLY_EVENT_TYPE && req.user?.role !== "admin") {
+      if (type === STAFF_ONLY_EVENT_TYPE && !req.user) {
         return res
           .status(403)
-          .json({ message: "Access denied - Admin only event type" });
+          .json({ message: "Access denied - Staff only event type" });
       }
       event.type = type;
     }
@@ -267,13 +266,13 @@ const VALID_EVENT_TYPES = [
   "autogolo",
   "penalty",
   "penalty falhado",
-  ADMIN_ONLY_EVENT_TYPE,
+  STAFF_ONLY_EVENT_TYPE,
 ];
 
-//  Exportar eventos (apenas admin) — para criação de highlights em vídeo
+//  Exportar eventos (staff autenticado: gameMaster ou admin) — para criação de highlights em vídeo
 //  Por omissão exporta TODOS os tipos de evento (incluindo "oportunidade de golo").
 //  Query params opcionais:
-//    - game=<id>   -> filtra apenas os eventos desse jogo (todos os dados do jogo)
+//    - game=<id>   -> filtra apenas os eventos desse jogo (todos os dados do jogo) — uso recomendado
 //    - type=<tipo> -> filtra por um único tipo de evento
 //    - format=csv|json (default: csv)
 export const exportEvents = async (req, res) => {
