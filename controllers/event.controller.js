@@ -2,6 +2,9 @@ import Event from "../models/event.model.js";
 import Game from "../models/game.model.js";
 import { updateGameResult } from "./game.controller.js";
 
+// Tipo de evento visível apenas ao administrador (não é exibido no site público)
+const ADMIN_ONLY_EVENT_TYPE = "oportunidade de golo";
+
 // Criar evento
 export const createEvent = async (req, res) => {
   try {
@@ -9,6 +12,12 @@ export const createEvent = async (req, res) => {
 
     if (!type || !time || !player || !team || !game) {
       return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    if (type === ADMIN_ONLY_EVENT_TYPE && req.user?.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Access denied - Admin only event type" });
     }
 
     if (time < 0 || time > 60) {
@@ -70,7 +79,11 @@ export const createEvent = async (req, res) => {
 //  Listar todos os eventos
 export const getAllEvents = async (req, res) => {
   try {
-    const events = await Event.find()
+    const isAdmin = req.user?.role === "admin";
+
+    const filter = isAdmin ? {} : { type: { $ne: ADMIN_ONLY_EVENT_TYPE } };
+
+    const events = await Event.find(filter)
       .populate("player")
       .populate("team")
       .populate("game")
@@ -92,6 +105,11 @@ export const getEventById = async (req, res) => {
       .populate("game");
 
     if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const isAdmin = req.user?.role === "admin";
+    if (event.type === ADMIN_ONLY_EVENT_TYPE && !isAdmin) {
       return res.status(404).json({ message: "Event not found" });
     }
 
@@ -140,9 +158,15 @@ export const updateEvent = async (req, res) => {
         "autogolo",
         "penalty",
         "penalty falhado",
+        "oportunidade de golo",
       ];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ message: "Invalid event type" });
+      }
+      if (type === ADMIN_ONLY_EVENT_TYPE && req.user?.role !== "admin") {
+        return res
+          .status(403)
+          .json({ message: "Access denied - Admin only event type" });
       }
       event.type = type;
     }
@@ -223,6 +247,116 @@ export const deleteEvent = async (req, res) => {
     res.json({ message: "Event deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEvent:", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Escapa um valor para uma célula CSV (RFC 4180)
+const csvEscape = (value) => {
+  const str = value === undefined || value === null ? "" : String(value);
+  if (/[",\n;]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
+const VALID_EVENT_TYPES = [
+  "cartao amarelo",
+  "cartao vermelho",
+  "golo",
+  "autogolo",
+  "penalty",
+  "penalty falhado",
+  ADMIN_ONLY_EVENT_TYPE,
+];
+
+//  Exportar eventos (apenas admin) — para criação de highlights em vídeo
+//  Por omissão exporta TODOS os tipos de evento (incluindo "oportunidade de golo").
+//  Query params opcionais:
+//    - game=<id>   -> filtra apenas os eventos desse jogo (todos os dados do jogo)
+//    - type=<tipo> -> filtra por um único tipo de evento
+//    - format=csv|json (default: csv)
+export const exportEvents = async (req, res) => {
+  try {
+    const { game, type } = req.query;
+    const format = (req.query.format || "csv").toLowerCase();
+
+    if (!["csv", "json"].includes(format)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid format. Use 'csv' or 'json'" });
+    }
+
+    if (type && !VALID_EVENT_TYPES.includes(type)) {
+      return res.status(400).json({ message: "Invalid event type" });
+    }
+
+    const filter = {};
+    if (game) filter.game = game;
+    if (type) filter.type = type;
+
+    const events = await Event.find(filter)
+      .populate("player")
+      .populate("team")
+      .populate({ path: "game", populate: { path: "teams" } })
+      .sort({ "game.n_jogo": 1, time: 1 });
+
+    const rows = events.map((e) => ({
+      eventId: e._id.toString(),
+      tipo: e.type,
+      jogo: e.game?.n_jogo ?? "",
+      dataJogo: e.game?.date ? new Date(e.game.date).toISOString() : "",
+      campo: e.game?.field ?? "",
+      equipas: e.game?.teams?.map((t) => t.name).join(" vs ") ?? "",
+      resultado: e.game?.result
+        ? `${e.game.result.homeScore}-${e.game.result.awayScore}`
+        : "",
+      minuto: e.time,
+      jogador: e.player?.name ?? "",
+      numeroJogador: e.player?.number ?? "",
+      equipaDoJogador: e.team?.name ?? "",
+      criadoEm: e.createdAt ? new Date(e.createdAt).toISOString() : "",
+    }));
+
+    const filenameBase = game ? `jogo-${game}-eventos` : "eventos";
+
+    if (format === "json") {
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filenameBase}.json"`,
+      );
+      return res.json({ events: rows });
+    }
+
+    const headers = [
+      "eventId",
+      "tipo",
+      "jogo",
+      "dataJogo",
+      "campo",
+      "equipas",
+      "resultado",
+      "minuto",
+      "jogador",
+      "numeroJogador",
+      "equipaDoJogador",
+      "criadoEm",
+    ];
+
+    const csvLines = [
+      headers.join(","),
+      ...rows.map((row) => headers.map((h) => csvEscape(row[h])).join(",")),
+    ];
+    const csv = csvLines.join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filenameBase}.csv"`,
+    );
+    res.status(200).send(csv);
+  } catch (error) {
+    console.log("Error in exportEvents:", error.message);
     res.status(500).json({ message: "Server error" });
   }
 };

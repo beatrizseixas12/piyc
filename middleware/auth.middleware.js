@@ -23,6 +23,27 @@ export const protectRoute = async (req, res, next) => {
   }
 };
 
+// Tal como protectRoute, mas nunca bloqueia o pedido.
+// Se existir um token válido, preenche req.user; caso contrário, req.user fica undefined.
+// Usado nas rotas públicas que precisam de saber se quem pede é admin (ex.: eventos
+// "oportunidade de golo", que não devem ser expostos a utilizadores não-admin).
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const user = await User.findById(decoded.userId).select("-password");
+
+    if (user) req.user = user;
+    next();
+  } catch (error) {
+    // Token inválido/expirado: seguimos sem utilizador autenticado.
+    next();
+  }
+};
+
 export const adminRoute = (req, res, next) => {
   if (req.user?.role === "admin") return next();
   res.status(403).json({ message: "Access denied - Admin only" });

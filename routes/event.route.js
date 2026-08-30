@@ -5,15 +5,29 @@ import {
   deleteEvent,
   getEventById,
   updateEvent,
+  exportEvents,
 } from "../controllers/event.controller.js";
 
-import { protectRoute, adminRoute } from "../middleware/auth.middleware.js";
+import {
+  protectRoute,
+  adminRoute,
+  optionalAuth,
+} from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/", getAllEvents);
+// Rota de exportação tem de vir antes de "/:id" para não ser interpretada como um ID.
+// Exporta TODOS os dados de eventos de um jogo (ou de todos os jogos), incluindo
+// o tipo "oportunidade de golo" — por isso é restrita a admin.
+// Exemplos:
+//   GET /api/events/export?game=<gameId>&format=csv   -> todos os eventos desse jogo
+//   GET /api/events/export?type=oportunidade de golo  -> só as oportunidades de golo
+//   GET /api/events/export?format=json                -> todos os eventos, todos os jogos
+router.get("/export", protectRoute, adminRoute, exportEvents);
+
+router.get("/", optionalAuth, getAllEvents);
 router.post("/", protectRoute, createEvent);
-router.get("/:id", getEventById);
+router.get("/:id", optionalAuth, getEventById);
 router.put("/:id", protectRoute, updateEvent);
 router.delete("/:id", protectRoute, adminRoute, deleteEvent);
 
