@@ -53,17 +53,50 @@ export const calculateGameResult = (game) => {
   return { homeScore, awayScore };
 };
 
+// Resultado do desempate por grandes penalidades (G.P.), calculado a partir
+// dos eventos "grande penalidade" — não conta para o resultado normal.
+export const calculatePenaltiesResult = (game) => {
+  const shootoutGoals = (game.events || []).filter(
+    (event) => event.type === "grande penalidade",
+  );
+
+  if (shootoutGoals.length === 0) return undefined;
+
+  let homeScore = 0;
+  let awayScore = 0;
+
+  const firstTeamId = normalizeId(game.teams[0]);
+  const secondTeamId = normalizeId(game.teams[1]);
+
+  shootoutGoals.forEach((goal) => {
+    const goalTeamId = normalizeId(goal.team);
+    if (goalTeamId === firstTeamId) {
+      homeScore++;
+    } else if (goalTeamId === secondTeamId) {
+      awayScore++;
+    }
+  });
+
+  return { homeScore, awayScore };
+};
+
 export const updateGameResult = async (game) => {
   const result = calculateGameResult(game);
+  const penalties = calculatePenaltiesResult(game);
+
+  const penaltiesChanged =
+    JSON.stringify(game.result?.penalties?.toObject?.() ?? game.result?.penalties ?? null) !==
+    JSON.stringify(penalties ?? null);
 
   if (
     !game.result ||
     game.result.homeScore !== result.homeScore ||
-    game.result.awayScore !== result.awayScore
+    game.result.awayScore !== result.awayScore ||
+    penaltiesChanged
   ) {
-    // Atualiza só homeScore/awayScore, preservando result.penalties (G.P.)
     game.result.homeScore = result.homeScore;
     game.result.awayScore = result.awayScore;
+    game.result.penalties = penalties;
     await game.save();
   }
 
@@ -212,7 +245,6 @@ export const updateGame = async (req, res) => {
     if (result !== undefined) {
       if (result.homeScore !== undefined) game.result.homeScore = result.homeScore;
       if (result.awayScore !== undefined) game.result.awayScore = result.awayScore;
-      if (result.penalties !== undefined) game.result.penalties = result.penalties;
     }
 
     const updatedGame = await game.save();

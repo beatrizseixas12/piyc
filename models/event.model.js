@@ -12,6 +12,7 @@ const eventSchema = new mongoose.Schema(
         "penalty",
         "penalty falhado",
         "oportunidade de golo",
+        "grande penalidade",
       ],
       required: true,
     },

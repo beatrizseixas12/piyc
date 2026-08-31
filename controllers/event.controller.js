@@ -20,7 +20,8 @@ export const createEvent = async (req, res) => {
         .json({ message: "Access denied - Staff only event type" });
     }
 
-    if (time < 0 || time > 60) {
+    // Grande penalidade (desempate) acontece depois do fim do jogo, fora do limite normal de tempo
+    if (type !== "grande penalidade" && (time < 0 || time > 60)) {
       return res
         .status(400)
         .json({ message: "Time must be between 0 and 60 minutes" });
@@ -141,7 +142,8 @@ export const updateEvent = async (req, res) => {
     }
 
     if (time !== undefined) {
-      if (time < 0 || time > 60) {
+      const effectiveType = type || event.type;
+      if (effectiveType !== "grande penalidade" && (time < 0 || time > 60)) {
         return res
           .status(400)
           .json({ message: "Time must be between 0 and 60 minutes" });
@@ -158,6 +160,7 @@ export const updateEvent = async (req, res) => {
         "penalty",
         "penalty falhado",
         "oportunidade de golo",
+        "grande penalidade",
       ];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ message: "Invalid event type" });
@@ -266,6 +269,7 @@ const VALID_EVENT_TYPES = [
   "autogolo",
   "penalty",
   "penalty falhado",
+  "grande penalidade",
   STAFF_ONLY_EVENT_TYPE,
 ];
 
