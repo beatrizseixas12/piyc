@@ -14,8 +14,9 @@ const playerSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    image: {
+    position: {
       type: String,
+      required: false,
     },
     team: {
       type: mongoose.Schema.Types.ObjectId,

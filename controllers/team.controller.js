@@ -4,7 +4,9 @@ import Event from "../models/event.model.js";
 
 export const getAllTeams = async (req, res) => {
   try {
-    const teams = await Team.find().populate("players");
+    const { league } = req.query;
+    const filter = league ? { league } : {};
+    const teams = await Team.find(filter).populate("players");
     res.status(200).json({ teams });
   } catch (error) {
     console.log("Error in getAllTeams controller", error.message);
@@ -27,7 +29,7 @@ export const getTeamById = async (req, res) => {
 
 export const createTeam = async (req, res) => {
   try {
-    const { players, name, country, group, image } = req.body;
+    const { players, name, country, group, image, league } = req.body;
 
     const team = await Team.create({
       name,
@@ -35,6 +37,7 @@ export const createTeam = async (req, res) => {
       players: players || [],
       image: image || "",
       group: group || null,
+      league: league || "youth-cup",
     });
 
     res.status(201).json(team);
@@ -70,6 +73,7 @@ export const editTeam = async (req, res) => {
     if (country !== undefined) team.country = country;
     if (players !== undefined) team.players = players;
     if (group !== undefined) team.group = group;
+    if (req.body.league !== undefined) team.league = req.body.league;
 
     if (req.body.image !== undefined) {
       team.image = req.body.image;
