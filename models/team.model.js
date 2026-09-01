@@ -25,13 +25,6 @@ const teamSchema = new mongoose.Schema(
       required: false,
       default: null,
     },
-    // A que torneio pertence a equipa — por omissão "youth-cup" para não
-    // afetar equipas já existentes (todas criadas antes deste campo existir).
-    league: {
-      type: String,
-      enum: ["youth-cup", "corporate-league"],
-      default: "youth-cup",
-    },
   },
   { timestamps: true },
 );
